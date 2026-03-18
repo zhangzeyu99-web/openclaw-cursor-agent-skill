@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
+export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8:replace}"
 export PYTHONUTF8="${PYTHONUTF8:-1}"
 export LANG="${LANG:-C.UTF-8}"
 export LC_ALL="${LC_ALL:-C.UTF-8}"

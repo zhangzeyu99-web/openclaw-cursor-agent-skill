@@ -204,7 +204,31 @@ openclaw cursor-agent-doctor
 
 WSL 的意义就是把最后这一层 shell / git 执行环境切到真正的 Linux 用户态，从根上绕开 Windows 原生兼容问题。
 
+## 实际执行记录（2026-03-19 更新）
+
+所有 Phase 已完成：
+
+| Phase | 状态 | 备注 |
+|-------|------|------|
+| Phase 1: 系统重启 | ✅ 完成 | WSL 功能已启用 |
+| Phase 2: 安装发行版 | ✅ 完成 | Debian (WSL1)，通过 Appx 手动安装 |
+| Phase 3: 安装 tmux | ✅ 完成 | tmux 3.1c via apt |
+| Phase 4: 安装 Cursor CLI | ✅ 完成 | 通过自定义包装脚本 + Node.js 22 |
+| Phase 5: 三件套验证 | ✅ 完成 | bash + tmux + agent 全部可用 |
+| Phase 6: 插件切 WSL 模式 | ✅ 完成 | `executionMode: "wsl"`, `wslDistro: "Debian"` |
+| Phase 7: 插件 doctor | ✅ 完成 | check-status.sh 正确返回所有任务 |
+| Phase 8: 最小 smoke test | ✅ 完成 | agent 成功创建 hello.txt |
+| Phase 9: spawn 端到端测试 | ✅ 完成 | `wsl-smoke-final` 任务完成，exit_code=0 |
+
+### 遇到的额外问题及修复
+
+1. **Windows 10 17763 仅支持 WSL1**：`wsl --install` 不可用，改为手动下载 Debian Appx 包安装。
+2. **Cursor CLI 自带 Node 二进制不兼容 WSL1**：改为手动安装 Node.js 22 Linux x64 + 自定义包装脚本。
+3. **包装脚本缺少 `"$@"`**：子命令（login/status）被吞掉，已修复。
+4. **CRLF 换行符**：Windows 文件复制到 WSL 后 shebang 失效，用 `tr -d '\r'` 修复。
+5. **PYTHONIOENCODING 容错**：从 `utf-8` 改为 `utf-8:replace`，避免非 UTF-8 字节导致 Python 崩溃。
+6. **WSL Debian 缺少 python3**：通过 `apt-get install python3` 补齐。
+
 ## 一句话结论
 
-当前机器已经完成了 WSL 功能启用前置步骤。  
-**现在只差一次重启 + 安装发行版 + 在 WSL 内装 tmux 与 agent**，就可以继续把最后一层彻底打通。
+**WSL 方案已全部落地并验证通过。** OpenClaw → WSL Debian → tmux → Cursor CLI Agent 端到端链路稳定运行。
