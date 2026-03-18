@@ -86,6 +86,21 @@ AGENT_BIN="$(detect_agent_command)" || die "未找到 Cursor CLI。请先安装 
 
 [[ -d "${PROJECT_PATH}" ]] || die "项目路径不存在: ${PROJECT_PATH}"
 
+if command -v cygpath >/dev/null 2>&1; then
+  case "${PROJECT_PATH}" in
+    [A-Za-z]:[\\/]*)
+      PROJECT_PATH="$(cygpath -u "${PROJECT_PATH}")"
+      ;;
+  esac
+  if [[ -n "${EXTERNAL_TASK_FILE}" ]]; then
+    case "${EXTERNAL_TASK_FILE}" in
+      [A-Za-z]:[\\/]*)
+        EXTERNAL_TASK_FILE="$(cygpath -u "${EXTERNAL_TASK_FILE}")"
+        ;;
+    esac
+  fi
+fi
+
 TASK_SLUG="$(slugify "${TASK_NAME}")"
 PROJECT_SLUG="$(slugify "$(basename "${PROJECT_PATH}")")"
 TIMESTAMP="$(timestamp_compact)"
@@ -237,7 +252,7 @@ tmux send-keys -t "${SESSION_NAME}" "if [ -f ~/.bashrc ]; then . ~/.bashrc; fi" 
 tmux send-keys -t "${SESSION_NAME}" "export OPENCLAW_TASK_ID='${TASK_ID}' OPENCLAW_SESSION_NAME='${SESSION_NAME}' OPENCLAW_PRIORITY='${PRIORITY}' OPENCLAW_ESTIMATED_DURATION='${ETA}'" C-m
 tmux send-keys -t "${SESSION_NAME}" "printf '\\n[openclaw] 使用任务文件: %s\\n' '${TASK_FILE}'" C-m
 
-printf -v AGENT_COMMAND '%q "$(cat %q)"' "${AGENT_BIN}" "${TASK_FILE}"
+printf -v AGENT_COMMAND '%q --trust "$(cat %q)"' "${AGENT_BIN}" "${TASK_FILE}"
 tmux send-keys -t "${SESSION_NAME}" "${AGENT_COMMAND}" C-m
 sleep 1
 

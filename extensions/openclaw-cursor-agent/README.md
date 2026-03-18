@@ -22,7 +22,7 @@
 - `cursor-agent-system/` 工具目录
 - `tmux`
 - `agent` 或 `cursor-agent`
-- Linux / WSL 环境中的 `bash`
+- 可用的 `bash` 运行环境
 
 ## 关键配置
 
@@ -59,10 +59,13 @@
 
 ## Windows 说明
 
-当前仓库环境是 Windows PowerShell，但这套架构本质仍依赖 `tmux`。因此推荐：
+当前仓库环境是 Windows PowerShell，但这套架构本质仍依赖 `tmux`。安装脚本已支持两种 Windows 路线：
 
-1. 在 Windows 上安装并启用 WSL
-2. 在 WSL 里安装 `tmux` 与 Cursor CLI
-3. 将插件配置为 `executionMode: "wsl"`
+1. 有 `WSL` 时，优先使用 `executionMode: "wsl"`
+2. 没有 `WSL` 时，自动降级到 `Git Bash` 兼容模式
+3. 在 `Git Bash` 模式下，安装脚本会自动补：
+   - Windows 原生 `Cursor CLI`
+   - Git Bash 可调用的 `agent` / `cursor-agent` / `python3`
+   - 与 Git for Windows 兼容的 `tmux`
 
-如果本机还没有 `wsl.exe`，安装脚本会保留插件文件并给出警告，但不会假装运行成功。
+如果本机既没有 `wsl.exe`，也没有可用的 `Git Bash`，安装脚本会保留插件文件并给出警告，但不会假装运行成功。

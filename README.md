@@ -45,7 +45,17 @@ OpenClaw 可以启动一个真正跑在 `tmux` 里的 Cursor CLI 会话，让任
 ### 6. 兼容当前 Windows 场景
 
 当前仓库额外附带了 PowerShell 安装脚本，适配你现在的 Windows 环境。  
-真正执行 `tmux` 时，推荐走 `WSL`；如果本机暂时没有 `wsl.exe`，插件会保留为禁用状态，避免假启动。
+安装脚本现在支持两条路线：
+
+- 优先 `WSL`
+- 如果没有 `wsl.exe`，自动降级到 `Git for Windows + Git Bash` 兼容模式
+
+在 Git Bash 兼容模式下，安装脚本会自动完成这些额外动作：
+
+- 安装 Windows 原生 `Cursor CLI`
+- 给 Git Bash 注入 `agent` / `cursor-agent` / `python3` 包装入口
+- 下载并写入与 Git for Windows 兼容的 `tmux` 运行文件
+- 初始化 `status/`、`tasks/`、`logs/` 运行目录
 
 ## 仓库结构
 
@@ -141,7 +151,7 @@ powershell -ExecutionPolicy Bypass -File .\install-openclaw-cursor-agent.ps1
 /cursor send myproj-auth-20260318-180000 /status
 /cursor send myproj-auth-20260318-180000 把 JWT 改成 RS256
 /cursor kill myproj-auth-20260318-180000 --force
-/cursor spawn feature-auth || 实现 JWT 登录接口 || /mnt/d/project/openclaw
+/cursor spawn feature-auth || 实现 JWT 登录接口 || D:/project/openclaw
 ```
 
 #### 2. OpenClaw 工具调用
@@ -216,13 +226,19 @@ cd cursor-agent-system
 
 ### 当前 Windows 环境说明
 
-这套架构依赖 `tmux`，而 `tmux` 不能在普通 Windows PowerShell 里原生运行。  
-所以在当前环境下，推荐配置为：
+这套架构依赖 `tmux`，而 `tmux` 不能在普通 Windows PowerShell 里直接作为 OpenClaw 后台会话层使用。
 
-- `executionMode: "wsl"`
-- `shell.executable: "C:/Windows/System32/wsl.exe"`
+当前仓库的安装脚本已经做了兼容处理：
 
-如果还没装 WSL，也可以先安装本仓库内容，等 WSL 和 tmux 就绪后再启用插件。
+1. 如果系统有 `wsl.exe`，默认走 `WSL`
+2. 如果没有 `wsl.exe`，但检测到 `Git for Windows`，则自动走 `direct + Git Bash`
+3. 如果两者都没有，插件文件仍会安装，但默认保持禁用
+
+因此在 Windows 上，推荐优先顺序是：
+
+- `WSL`
+- `Git Bash 兼容模式`
+- 最后才是手动补环境
 
 ## 安装脚本做了什么
 
@@ -231,8 +247,10 @@ cd cursor-agent-system
 1. 把插件复制到 `~/.openclaw/workspace/plugins/openclaw-cursor-agent`
 2. 把 `cursor-agent-system` 复制到 `~/.openclaw/workspace/cursor-agent-system`
 3. 尝试更新你的 `openclaw.json`
-4. 自动探测 `wsl.exe` 或 `bash.exe`
-5. 如果系统还不能执行这套架构，就先把插件设为 `disabled`
+4. 自动探测 `wsl.exe`、`git.exe`、`bash.exe`
+5. 在 Git Bash 模式下自动补 `tmux`、`agent`、`python3` 兼容层
+6. 初始化运行目录
+7. 如果系统还不能执行这套架构，就先把插件设为 `disabled`
 
 ## 配置示例
 

@@ -10,14 +10,14 @@
     },
     "entries": {
       "openclaw-cursor-agent": {
-        "enabled": false,
+        "enabled": true,
         "config": {
           "toolkitRoot": "C:/Users/Administrator/.openclaw/workspace/cursor-agent-system",
           "defaultProjectPath": "D:/project/openclaw",
-          "executionMode": "wsl",
+          "executionMode": "direct",
           "timeoutMs": 120000,
           "shell": {
-            "executable": "C:/Windows/System32/wsl.exe",
+            "executable": "D:/Git/bin/bash.exe",
             "args": [],
             "workingDirectory": "",
             "wslDistro": ""

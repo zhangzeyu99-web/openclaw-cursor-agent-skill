@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+export PYTHONIOENCODING="${PYTHONIOENCODING:-utf-8}"
+export PYTHONUTF8="${PYTHONUTF8:-1}"
+export LANG="${LANG:-C.UTF-8}"
+export LC_ALL="${LC_ALL:-C.UTF-8}"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYSTEM_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 STATUS_DIR="${SYSTEM_ROOT}/status"
