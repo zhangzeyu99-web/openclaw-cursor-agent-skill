@@ -14,13 +14,13 @@
         "config": {
           "toolkitRoot": "C:/Users/Administrator/.openclaw/workspace/cursor-agent-system",
           "defaultProjectPath": "D:/project/openclaw",
-          "executionMode": "direct",
+          "executionMode": "wsl",
           "timeoutMs": 120000,
           "shell": {
-            "executable": "D:/Git/bin/bash.exe",
+            "executable": "C:/Windows/System32/wsl.exe",
             "args": [],
             "workingDirectory": "",
-            "wslDistro": ""
+            "wslDistro": "Debian"
           }
         }
       }
