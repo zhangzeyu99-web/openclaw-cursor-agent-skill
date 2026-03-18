@@ -107,6 +107,7 @@ TIMESTAMP="$(timestamp_compact)"
 SESSION_NAME="${PROJECT_SLUG}-${TASK_SLUG}-${TIMESTAMP}"
 TASK_ID="${SESSION_NAME}"
 TASK_FILE="$(task_file_path "${SESSION_NAME}")"
+RUNNER_FILE="$(runner_file_path "${SESSION_NAME}")"
 STATUS_FILE="$(status_file_path "${SESSION_NAME}")"
 LOG_FILE="$(log_file_path "${SESSION_NAME}")"
 CREATED_AT="$(now_iso)"
@@ -119,6 +120,7 @@ if [[ "${OUTPUT_JSON}" != "true" ]]; then
   printf '优先级:     %s\n' "${PRIORITY}"
   printf '预计耗时:   %s\n' "${ETA}"
   printf '任务文件:   %s\n' "${TASK_FILE}"
+  printf '启动脚本:   %s\n' "${RUNNER_FILE}"
   printf '状态文件:   %s\n' "${STATUS_FILE}"
   printf '日志文件:   %s\n' "${LOG_FILE}"
   printf '\n'
@@ -224,6 +226,7 @@ cat > "${STATUS_FILE}" <<EOF
   "startedAt": "${CREATED_AT}",
   "lastCheckAt": "${CREATED_AT}",
   "taskFile": "${TASK_FILE}",
+  "runnerFile": "${RUNNER_FILE}",
   "logFile": "${LOG_FILE}",
   "cursor": {
     "pid": null,
@@ -242,18 +245,42 @@ cat > "${STATUS_FILE}" <<EOF
 }
 EOF
 
+cat > "${RUNNER_FILE}" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -f ~/.bashrc ]; then . ~/.bashrc; fi
+
+export OPENCLAW_TASK_ID='${TASK_ID}'
+export OPENCLAW_SESSION_NAME='${SESSION_NAME}'
+export OPENCLAW_PRIORITY='${PRIORITY}'
+export OPENCLAW_ESTIMATED_DURATION='${ETA}'
+export PYTHONIOENCODING='utf-8'
+export PYTHONUTF8='1'
+export LANG='C.UTF-8'
+export LC_ALL='C.UTF-8'
+
+PROMPT_FILE='${TASK_FILE}'
+PROMPT_CONTENT="\$(cat "\${PROMPT_FILE}")"
+
+printf '\\n[openclaw] 使用任务文件: %s\\n' "\${PROMPT_FILE}"
+set +e
+'${AGENT_BIN}' --trust "\${PROMPT_CONTENT}"
+AGENT_EXIT_CODE="\$?"
+set -e
+printf '[openclaw] agent_exit_code=%s\\n' "\${AGENT_EXIT_CODE}"
+exit "\${AGENT_EXIT_CODE}"
+EOF
+chmod +x "${RUNNER_FILE}"
+
 if [[ "${OUTPUT_JSON}" != "true" ]]; then
   info "正在创建 tmux 会话..."
 fi
 tmux new-session -d -s "${SESSION_NAME}" -c "${PROJECT_PATH}"
 tmux pipe-pane -o -t "${SESSION_NAME}" "cat >> '${LOG_FILE}'"
 
-tmux send-keys -t "${SESSION_NAME}" "if [ -f ~/.bashrc ]; then . ~/.bashrc; fi" C-m
-tmux send-keys -t "${SESSION_NAME}" "export OPENCLAW_TASK_ID='${TASK_ID}' OPENCLAW_SESSION_NAME='${SESSION_NAME}' OPENCLAW_PRIORITY='${PRIORITY}' OPENCLAW_ESTIMATED_DURATION='${ETA}'" C-m
-tmux send-keys -t "${SESSION_NAME}" "printf '\\n[openclaw] 使用任务文件: %s\\n' '${TASK_FILE}'" C-m
-
-printf -v AGENT_COMMAND '%q --trust "$(cat %q)"' "${AGENT_BIN}" "${TASK_FILE}"
-tmux send-keys -t "${SESSION_NAME}" "${AGENT_COMMAND}" C-m
+printf -v RUNNER_COMMAND 'bash %q' "${RUNNER_FILE}"
+tmux send-keys -t "${SESSION_NAME}" "${RUNNER_COMMAND}" C-m
 sleep 1
 
 PANE_PID="$(pane_pid "${SESSION_NAME}")"

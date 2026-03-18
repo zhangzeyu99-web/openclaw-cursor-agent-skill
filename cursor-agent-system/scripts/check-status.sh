@@ -19,7 +19,7 @@ EOF
 }
 
 infer_state_and_progress() {
-  python3 - "$1" "$2" "$3" <<'PY'
+  python3 - "$1" "$2" "$3" "$4" <<'PY'
 import json
 import re
 import sys
@@ -27,6 +27,7 @@ import sys
 existing = sys.argv[1]
 captured = sys.argv[2]
 session_alive = sys.argv[3] == "true"
+pane_command = sys.argv[4].strip().lower()
 
 state = existing or "unknown"
 completed = []
@@ -41,6 +42,27 @@ for line in lines:
     elif re.match(r"^(开始执行|任务完成|遇到问题)[:：]", line):
         current = line
 
+last_line = lines[-1] if lines else ""
+shell_commands = {"bash", "sh", "zsh", "dash", "fish"}
+shell_idle = session_alive and pane_command in shell_commands and (
+    last_line in {"$", "#"} or
+    last_line.endswith("$") or
+    last_line.endswith("#")
+)
+
+failure_markers = [
+    "unexpected EOF",
+    "command not found",
+    "agent_exit_code=",
+    "Workspace Trust Required",
+    "No such file or directory",
+]
+failure_reason = ""
+for marker in failure_markers:
+    if marker in captured:
+        failure_reason = marker
+        break
+
 if "任务完成:" in captured:
     state = "completed"
     progress = "100%"
@@ -51,6 +73,19 @@ elif "遇到问题:" in captured:
     progress = "90%" if completed else "20%"
     if not current:
         current = "任务阻塞，等待处理"
+elif shell_idle and ("agent --trust" in captured or "cursor-agent --trust" in captured):
+    state = "failed"
+    progress = "0%"
+    if failure_reason == "unexpected EOF":
+        current = "Cursor CLI 启动命令解析失败"
+    elif failure_reason == "command not found":
+        current = "运行环境缺少必要命令"
+    elif failure_reason == "Workspace Trust Required":
+        current = "Cursor CLI 卡在工作区信任确认"
+    elif failure_reason.startswith("agent_exit_code="):
+        current = "Cursor CLI 已退出"
+    else:
+        current = "Cursor CLI 已退出或未正确启动"
 elif "开始执行:" in captured or completed:
     state = "running"
     current = current or (completed[-1] if completed else "任务运行中")
@@ -159,10 +194,14 @@ HAS_SESSION="false"
 PID=""
 PROCESS_INFO=""
 LAST_CAPTURE=""
+PANE_COMMAND=""
+PANE_PATH=""
 
 if session_exists "${SESSION_NAME}"; then
   HAS_SESSION="true"
   PID="$(pane_pid "${SESSION_NAME}")"
+  PANE_COMMAND="$(pane_current_command "${SESSION_NAME}")"
+  PANE_PATH="$(pane_current_path "${SESSION_NAME}")"
   LAST_CAPTURE="$(capture_recent_output "${SESSION_NAME}" 30)"
   if [[ -n "${PID}" ]]; then
     PROCESS_INFO="$(ps -p "${PID}" -o pid=,stat=,etime=,command= 2>/dev/null || true)"
@@ -171,7 +210,7 @@ else
   LAST_CAPTURE="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("output",{}).get("lastCapture",""))' "${STATUS_FILE}")"
 fi
 
-INFERRED_JSON="$(infer_state_and_progress "${STATUS_JSON}" "${LAST_CAPTURE}" "${HAS_SESSION}")"
+INFERRED_JSON="$(infer_state_and_progress "${STATUS_JSON}" "${LAST_CAPTURE}" "${HAS_SESSION}" "${PANE_COMMAND}")"
 LAST_CAPTURE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.stdin.read(), ensure_ascii=False))' <<<"${LAST_CAPTURE}")"
 if [[ -n "${PID}" ]]; then
   PID_UPDATE="${PID}"
@@ -189,7 +228,7 @@ update_status_file "${STATUS_FILE}" \
   "output.lastCapture=json:${LAST_CAPTURE_JSON}"
 
 if [[ "${OUTPUT_JSON}" == "true" ]]; then
-  python3 - "${STATUS_FILE}" "${HAS_SESSION}" "${PID}" "${PROCESS_INFO}" <<'PY'
+  python3 - "${STATUS_FILE}" "${HAS_SESSION}" "${PID}" "${PROCESS_INFO}" "${PANE_COMMAND}" "${PANE_PATH}" <<'PY'
 import json
 import sys
 
@@ -197,6 +236,8 @@ path = sys.argv[1]
 has_session = sys.argv[2] == "true"
 pid = sys.argv[3] or None
 process_info = sys.argv[4]
+pane_command = sys.argv[5]
+pane_path = sys.argv[6]
 
 with open(path, "r", encoding="utf-8") as fh:
     data = json.load(fh)
@@ -208,6 +249,8 @@ print(json.dumps({
     "hasSession": has_session,
     "pid": pid,
     "processInfo": process_info,
+    "paneCommand": pane_command,
+    "panePath": pane_path,
     "status": data,
 }, ensure_ascii=False))
 PY
@@ -225,6 +268,12 @@ if [[ "${HAS_SESSION}" == "true" ]]; then
   printf 'tmux 会话:   运行中\n'
   if [[ -n "${PID}" ]]; then
     printf 'Pane PID:    %s\n' "${PID}"
+  fi
+  if [[ -n "${PANE_COMMAND}" ]]; then
+    printf 'Pane 命令:   %s\n' "${PANE_COMMAND}"
+  fi
+  if [[ -n "${PANE_PATH}" ]]; then
+    printf 'Pane 路径:   %s\n' "${PANE_PATH}"
   fi
 else
   printf 'tmux 会话:   未运行或已结束\n'

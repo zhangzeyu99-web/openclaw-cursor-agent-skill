@@ -99,6 +99,10 @@ task_file_path() {
   printf '%s\n' "${TASKS_DIR}/$1.md"
 }
 
+runner_file_path() {
+  printf '%s\n' "${TASKS_DIR}/$1.runner.sh"
+}
+
 log_file_path() {
   printf '%s\n' "${LOGS_DIR}/$1.log"
 }
@@ -109,6 +113,14 @@ session_exists() {
 
 pane_pid() {
   tmux display-message -p -t "$1" "#{pane_pid}" 2>/dev/null || true
+}
+
+pane_current_command() {
+  tmux display-message -p -t "$1" "#{pane_current_command}" 2>/dev/null || true
+}
+
+pane_current_path() {
+  tmux display-message -p -t "$1" "#{pane_current_path}" 2>/dev/null || true
 }
 
 capture_recent_output() {
