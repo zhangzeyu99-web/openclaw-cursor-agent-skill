@@ -262,6 +262,8 @@ Windows 示例配置见：
 
 - 给最终用户看的自然语言说明：`Cursor自然语言使用说明.md`
 - 给 OpenClaw Agent 看的环境说明：`OpenClawAgent环境说明书.md`
+- Windows/Git Bash 测试结论：`最终测试报告.md`
+- WSL 最终落地方案：`WSL最终落地方案.md`
 
 ## 适用场景
 

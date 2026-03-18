@@ -63,16 +63,40 @@ for marker in failure_markers:
         failure_reason = marker
         break
 
+json_result_success = '"type":"result","subtype":"success"' in captured
+json_result_error = '"type":"result","subtype":"error"' in captured or '"is_error":true' in captured
+json_tool_started = '"type":"tool_call","subtype":"started"' in captured
+json_tool_completed = '"type":"tool_call","subtype":"completed"' in captured
+json_assistant = '"type":"assistant"' in captured
+json_thinking = '"type":"thinking"' in captured
+
 if "任务完成:" in captured:
     state = "completed"
     progress = "100%"
     if not current:
         current = "任务已完成"
+elif json_result_success:
+    state = "completed"
+    progress = "100%"
+    current = current or "Cursor Agent 已返回成功结果"
+elif json_result_error:
+    state = "failed"
+    progress = "0%"
+    current = current or "Cursor Agent 返回错误结果"
 elif "遇到问题:" in captured:
     state = "blocked"
     progress = "90%" if completed else "20%"
     if not current:
         current = "任务阻塞，等待处理"
+elif json_tool_started or json_tool_completed or json_assistant or json_thinking:
+    state = "running"
+    if json_tool_started and not current:
+        current = "Cursor 正在调用工具"
+    elif json_assistant and not current:
+        current = "Cursor 正在输出阶段性结果"
+    elif json_thinking and not current:
+        current = "Cursor 正在分析任务"
+    progress = "35%" if json_tool_started else "15%"
 elif shell_idle and ("agent --trust" in captured or "cursor-agent --trust" in captured):
     state = "failed"
     progress = "0%"

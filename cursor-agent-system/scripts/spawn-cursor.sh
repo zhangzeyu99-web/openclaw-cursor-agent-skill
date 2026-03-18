@@ -74,6 +74,7 @@ set -- "${POSITIONAL[@]}"
 TASK_NAME="${1:-}"
 TASK_DESCRIPTION="${2:-}"
 PROJECT_PATH="${3:-$(pwd)}"
+ORIGINAL_PROJECT_PATH="${PROJECT_PATH}"
 
 [[ -n "${TASK_NAME}" && -n "${TASK_DESCRIPTION}" ]] || {
   usage
@@ -99,6 +100,11 @@ if command -v cygpath >/dev/null 2>&1; then
         ;;
     esac
   fi
+fi
+
+WORKSPACE_PATH="${PROJECT_PATH}"
+if command -v cygpath >/dev/null 2>&1; then
+  WORKSPACE_PATH="$(cygpath -w "${PROJECT_PATH}" 2>/dev/null || printf '%s' "${ORIGINAL_PROJECT_PATH}")"
 fi
 
 TASK_SLUG="$(slugify "${TASK_NAME}")"
@@ -259,13 +265,14 @@ export PYTHONIOENCODING='utf-8'
 export PYTHONUTF8='1'
 export LANG='C.UTF-8'
 export LC_ALL='C.UTF-8'
+export OPENCLAW_WORKSPACE_PATH='${WORKSPACE_PATH}'
 
 PROMPT_FILE='${TASK_FILE}'
 PROMPT_CONTENT="\$(cat "\${PROMPT_FILE}")"
 
 printf '\\n[openclaw] 使用任务文件: %s\\n' "\${PROMPT_FILE}"
 set +e
-'${AGENT_BIN}' --trust "\${PROMPT_CONTENT}"
+'${AGENT_BIN}' --trust --force --print --output-format stream-json --stream-partial-output --workspace "\${OPENCLAW_WORKSPACE_PATH}" "\${PROMPT_CONTENT}"
 AGENT_EXIT_CODE="\$?"
 set -e
 printf '[openclaw] agent_exit_code=%s\\n' "\${AGENT_EXIT_CODE}"
