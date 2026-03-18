@@ -258,6 +258,11 @@ Windows 示例配置见：
 
 - `extensions/openclaw-cursor-agent/examples/openclaw.json.windows.example.json`
 
+## 补充说明文档
+
+- 给最终用户看的自然语言说明：`Cursor自然语言使用说明.md`
+- 给 OpenClaw Agent 看的环境说明：`OpenClawAgent环境说明书.md`
+
 ## 适用场景
 
 这套方案特别适合：
