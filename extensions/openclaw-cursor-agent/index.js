@@ -155,6 +155,75 @@ function parseJsonOutput(stdout) {
   return null;
 }
 
+async function runShellProbe(config, commandText) {
+  const cwd = config.shell.workingDirectory || config.toolkitRoot || __dirname;
+  const shellExecutable = config.shell.executable || (config.executionMode === "wsl" ? "wsl.exe" : "bash");
+  const shellArgs = Array.isArray(config.shell.args) ? config.shell.args.slice() : [];
+  let args = [];
+
+  if (config.executionMode === "wsl") {
+    args = shellArgs.slice();
+    if (config.shell.wslDistro) {
+      args.push("-d", config.shell.wslDistro);
+    }
+    args.push("--", "bash", "-lc", commandText);
+  } else {
+    args = [...shellArgs, "-lc", commandText];
+  }
+
+  return await new Promise((resolve) => {
+    const child = spawn(shellExecutable, args, {
+      cwd,
+      env: process.env,
+      windowsHide: true,
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let finished = false;
+    const timer = setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      child.kill();
+      resolve({ ok: false, code: -1, stdout, stderr: `${stderr}\nprobe timeout`.trim() });
+    }, Math.min(config.timeoutMs, 15000));
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      resolve({ ok: false, code: -1, stdout, stderr: String(error) });
+    });
+    child.on("close", (code) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      resolve({
+        ok: Number(code ?? 1) === 0,
+        code: Number(code ?? 1),
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
+function summarizeProbe(result) {
+  const stdout = asString(result?.stdout).trim();
+  const stderr = asString(result?.stderr).trim();
+  return stdout || stderr || "";
+}
+
+function boolAnd(items) {
+  return items.every(Boolean);
+}
+
 function buildExecution(config, scriptName, args) {
   const scriptPath = resolveScriptPath(config, scriptName);
   const cwd = config.shell.workingDirectory || config.toolkitRoot || __dirname;
@@ -229,22 +298,83 @@ async function runToolkitScript(config, scriptName, args) {
 async function diagnose(config) {
   const toolkitRoot = config.toolkitRoot || "(未配置)";
   const shellExecutable = config.shell.executable || "(未配置)";
-  const scriptExists = config.toolkitRoot ? fs.existsSync(path.join(config.toolkitRoot, "scripts", "spawn-cursor.sh")) : false;
-  const statusDirExists = config.toolkitRoot ? fs.existsSync(path.join(config.toolkitRoot, "status")) : false;
+  const scriptsDir = config.toolkitRoot ? path.join(config.toolkitRoot, "scripts") : "";
+  const statusDir = config.toolkitRoot ? path.join(config.toolkitRoot, "status") : "";
+  const tasksDir = config.toolkitRoot ? path.join(config.toolkitRoot, "tasks") : "";
+  const logsDir = config.toolkitRoot ? path.join(config.toolkitRoot, "logs") : "";
+  const scriptChecks = {
+    spawn: config.toolkitRoot ? fs.existsSync(path.join(scriptsDir, "spawn-cursor.sh")) : false,
+    checkStatus: config.toolkitRoot ? fs.existsSync(path.join(scriptsDir, "check-status.sh")) : false,
+    attachSession: config.toolkitRoot ? fs.existsSync(path.join(scriptsDir, "attach-session.sh")) : false,
+    sendCommand: config.toolkitRoot ? fs.existsSync(path.join(scriptsDir, "send-command.sh")) : false,
+    killSession: config.toolkitRoot ? fs.existsSync(path.join(scriptsDir, "kill-session.sh")) : false,
+    common: config.toolkitRoot ? fs.existsSync(path.join(scriptsDir, "common.sh")) : false,
+  };
+  const scriptExists = boolAnd(Object.values(scriptChecks));
+  const runtimeDirs = {
+    status: config.toolkitRoot ? fs.existsSync(statusDir) : false,
+    tasks: config.toolkitRoot ? fs.existsSync(tasksDir) : false,
+    logs: config.toolkitRoot ? fs.existsSync(logsDir) : false,
+  };
+  const statusDirExists = runtimeDirs.status;
   const executableExists = shellExecutable ? (
     fs.existsSync(shellExecutable) || shellExecutable === "bash" || shellExecutable === "wsl.exe"
   ) : false;
 
-  let probe = null;
-  try {
-    const scriptName = config.executionMode === "wsl" ? "wsl-bridge" : "bash";
-    probe = { ok: true, mode: config.executionMode, runner: scriptName };
-  } catch (error) {
-    probe = { ok: false, error: String(error) };
-  }
+  const shellRunner = executableExists
+    ? await runShellProbe(config, "printf 'shell_ok'")
+    : { ok: false, code: -1, stdout: "", stderr: "shell executable not found" };
+  const pythonProbe = shellRunner.ok
+    ? await runShellProbe(config, "command -v python3 && python3 --version")
+    : { ok: false, code: -1, stdout: "", stderr: "shell unavailable" };
+  const tmuxProbe = shellRunner.ok
+    ? await runShellProbe(config, "command -v tmux && tmux -V")
+    : { ok: false, code: -1, stdout: "", stderr: "shell unavailable" };
+  const agentProbe = shellRunner.ok
+    ? await runShellProbe(config, "if command -v agent >/dev/null 2>&1; then command -v agent && agent --version; elif command -v cursor-agent >/dev/null 2>&1; then command -v cursor-agent && cursor-agent --version; else exit 1; fi")
+    : { ok: false, code: -1, stdout: "", stderr: "shell unavailable" };
+
+  const dependencyChecks = {
+    python3: {
+      ok: pythonProbe.ok,
+      detail: summarizeProbe(pythonProbe),
+      code: pythonProbe.code,
+    },
+    tmux: {
+      ok: tmuxProbe.ok,
+      detail: summarizeProbe(tmuxProbe),
+      code: tmuxProbe.code,
+    },
+    agent: {
+      ok: agentProbe.ok,
+      detail: summarizeProbe(agentProbe),
+      code: agentProbe.code,
+    },
+  };
+
+  const issues = [];
+  if (!config.toolkitRoot) issues.push("未配置 toolkitRoot");
+  if (!scriptExists) issues.push("工具脚本不完整");
+  if (!runtimeDirs.status || !runtimeDirs.tasks || !runtimeDirs.logs) issues.push("运行目录未初始化");
+  if (!executableExists) issues.push("shell.executable 不存在");
+  if (!shellRunner.ok) issues.push("shell 运行器不可执行");
+  if (!dependencyChecks.python3.ok) issues.push("缺少 python3");
+  if (!dependencyChecks.tmux.ok) issues.push("缺少 tmux");
+  if (!dependencyChecks.agent.ok) issues.push("缺少 agent 或 cursor-agent");
 
   return {
-    ok: Boolean(scriptExists && executableExists),
+    ok: Boolean(
+      config.toolkitRoot &&
+      scriptExists &&
+      runtimeDirs.status &&
+      runtimeDirs.tasks &&
+      runtimeDirs.logs &&
+      executableExists &&
+      shellRunner.ok &&
+      dependencyChecks.python3.ok &&
+      dependencyChecks.tmux.ok &&
+      dependencyChecks.agent.ok
+    ),
     pluginId: PLUGIN_ID,
     toolkitRoot,
     defaultProjectPath: config.defaultProjectPath || "",
@@ -252,9 +382,18 @@ async function diagnose(config) {
     shellExecutable,
     shellArgs: config.shell.args,
     scriptExists,
+    scriptsDir,
+    scriptChecks,
     statusDirExists,
+    runtimeDirs,
     executableExists,
-    probe,
+    shellRunner: {
+      ok: shellRunner.ok,
+      code: shellRunner.code,
+      detail: summarizeProbe(shellRunner) || "shell_ok",
+    },
+    dependencyChecks,
+    issues,
   };
 }
 
