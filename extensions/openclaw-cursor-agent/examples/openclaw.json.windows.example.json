@@ -1,0 +1,29 @@
+{
+  "plugins": {
+    "allow": [
+      "openclaw-cursor-agent"
+    ],
+    "load": {
+      "paths": [
+        "C:/Users/Administrator/.openclaw/workspace/plugins/openclaw-cursor-agent"
+      ]
+    },
+    "entries": {
+      "openclaw-cursor-agent": {
+        "enabled": false,
+        "config": {
+          "toolkitRoot": "C:/Users/Administrator/.openclaw/workspace/cursor-agent-system",
+          "defaultProjectPath": "D:/project/openclaw",
+          "executionMode": "wsl",
+          "timeoutMs": 120000,
+          "shell": {
+            "executable": "C:/Windows/System32/wsl.exe",
+            "args": [],
+            "workingDirectory": "",
+            "wslDistro": ""
+          }
+        }
+      }
+    }
+  }
+}

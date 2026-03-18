@@ -1,0 +1,19 @@
+# Local environment and large files
+backup-extracted/
+*.tar.gz
+*.sha256
+*.exe
+*.msi
+node-install.log
+
+# Sensitive local config
+openclaw.json
+
+# Runtime artifacts
+cursor-agent-system/status/*.json
+cursor-agent-system/tasks/*.md
+cursor-agent-system/logs/*.log
+
+# Common generated folders
+**/node_modules/
+**/.DS_Store
