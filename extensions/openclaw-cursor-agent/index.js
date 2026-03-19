@@ -166,9 +166,9 @@ async function runShellProbe(config, commandText) {
     if (config.shell.wslDistro) {
       args.push("-d", config.shell.wslDistro);
     }
-    args.push("--", "bash", "-lc", commandText);
+    args.push("--", "bash", "-c", commandText);
   } else {
-    args = [...shellArgs, "-lc", commandText];
+    args = [...shellArgs, "-c", commandText];
   }
 
   return await new Promise((resolve) => {
@@ -234,8 +234,7 @@ function buildExecution(config, scriptName, args) {
     if (config.shell.wslDistro) {
       shellArgs.push("-d", config.shell.wslDistro);
     }
-    const command = ["bash", toWslPath(scriptPath), ...args].map((item) => posixQuote(item)).join(" ");
-    shellArgs.push("--", "bash", "-lc", command);
+    shellArgs.push("--", "bash", toWslPath(scriptPath), ...args);
     return { executable: shellExecutable, args: shellArgs, cwd };
   }
 
